@@ -16,10 +16,11 @@ const app = express();
 connectDB();
 
 app.use(cors({
-  origin: [
-    "http://localhost:5173",
-    "https://frontend-g991-git-main-khushijatavs-projects.vercel.app"
-  ]
+  origin: "*" ,
+  //[
+  //   "http://localhost:5173",
+  //   "https://frontend-g991-git-main-khushijatavs-projects.vercel.app"
+  // ]
 }));
 app.use(express.json());
 
