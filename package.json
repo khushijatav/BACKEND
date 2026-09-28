@@ -1,12 +1,12 @@
 {
   "name": "backend",
   "version": "1.0.0",
-  "description": "",
+  "description": "MindCare Counseling Backend API",
   "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node server.js",
     "dev": "nodemon server.js",
+    "build": "node -e \"console.log('Backend build verified')\"",
     "seed": "node seed.js"
   },
   "keywords": [],

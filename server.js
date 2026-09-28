@@ -14,47 +14,56 @@ const serviceRoutes = require("./routes/serviceRoutes");
 
 const app = express();
 
-// Connect Database
-connectDB();
+// Initialize DB connection eagerly
+connectDB().catch((err) => {
+  console.warn("[MongoDB] Initial connection pending or failed:", err.message);
+});
 
-// CORS configuration supporting credentials and common frontend ports
-const allowedOrigins = [
-  "http://localhost:5173",
-  "http://localhost:5174",
-  "http://localhost:3000",
-  "http://localhost:4173",
-  "http://127.0.0.1:5173",
-  process.env.CLIENT_URL,
-].filter(Boolean);
+// Permissive CORS configuration supporting Vercel, localhost, and mobile apps
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Reflect request origin so all domains (Vercel, localhost, mobile) are allowed
+    callback(null, true);
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept"],
+};
 
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      // Allow mobile apps, Postman, curl, or server-to-server requests
-      if (!origin) return callback(null, true);
-      if (
-        allowedOrigins.includes(origin) ||
-        process.env.NODE_ENV !== "production"
-      ) {
-        return callback(null, true);
-      }
-      return callback(null, true);
-    },
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-  })
-);
+app.use(cors(corsOptions));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Ensure database connection middleware for serverless / on-demand environments
+app.use(async (req, res, next) => {
+  // Allow health checks to run without blocking on DB
+  if (req.path === "/" || req.path === "/api/health") {
+    return next();
+  }
+
+  try {
+    if (mongoose.connection.readyState !== 1) {
+      await connectDB();
+    }
+    next();
+  } catch (err) {
+    console.error("[Database Connection Error on Request]", err.message);
+    return res.status(503).json({
+      status: "error",
+      message: "Database connection unavailable. Please check MONGO_URI configuration.",
+      error: err.message,
+    });
+  }
+});
+
 // Root route
 app.get("/", (req, res) => {
+  const dbState = mongoose.connection.readyState;
   res.status(200).json({
     status: "ok",
-    message: "MindCare Counseling Backend is Running",
-    database: mongoose.connection.readyState === 1 ? "Connected" : "Disconnected",
+    service: "MindCare Counseling Backend API",
+    database: dbState === 1 ? "Connected" : dbState === 2 ? "Connecting" : "Disconnected",
     timestamp: new Date().toISOString(),
   });
 });

@@ -1,7 +1,10 @@
 const mongoose = require("mongoose");
 const { seedServices, seedCounselors } = require("./seedData");
 
+let isSeeded = false;
+
 const autoSeedIfEmpty = async () => {
+  if (isSeeded) return;
   try {
     const Service = require("../models/Service");
     const Counselor = require("../models/Counselor");
@@ -19,23 +22,41 @@ const autoSeedIfEmpty = async () => {
       await Counselor.insertMany(seedCounselors);
       console.log(`[MongoDB] Successfully seeded ${seedCounselors.length} counselors.`);
     }
+    isSeeded = true;
   } catch (err) {
     console.warn("[MongoDB] Auto-seeding warning:", err.message);
   }
 };
 
+let cachedPromise = null;
+
 const connectDB = async () => {
-  try {
-    const mongoUri = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/mindcare_counseling";
-    const conn = await mongoose.connect(mongoUri);
-
-    console.log(`[MongoDB] Connected successfully to host: ${conn.connection.host}, database: ${conn.connection.name}`);
-
-    // Auto seed if empty
-    await autoSeedIfEmpty();
-  } catch (error) {
-    console.error("[MongoDB] Connection Error:", error.message);
+  if (mongoose.connection.readyState === 1) {
+    return mongoose.connection;
   }
+
+  if (cachedPromise) {
+    return cachedPromise;
+  }
+
+  const mongoUri = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/mindcare_counseling";
+
+  cachedPromise = mongoose
+    .connect(mongoUri, {
+      serverSelectionTimeoutMS: 8000,
+    })
+    .then(async (conn) => {
+      console.log(`[MongoDB] Connected successfully to host: ${conn.connection.host}, database: ${conn.connection.name}`);
+      await autoSeedIfEmpty();
+      return conn;
+    })
+    .catch((error) => {
+      cachedPromise = null;
+      console.error("[MongoDB] Connection Error:", error.message);
+      throw error;
+    });
+
+  return cachedPromise;
 };
 
 module.exports = connectDB;
