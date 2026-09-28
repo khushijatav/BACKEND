@@ -103,6 +103,10 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
-  console.log(`[MindCare Server] Running on http://localhost:${PORT}`);
-});
+if (!process.env.VERCEL) {
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`[MindCare Server] Running on http://localhost:${PORT} and http://0.0.0.0:${PORT}`);
+  });
+}
+
+module.exports = app;
