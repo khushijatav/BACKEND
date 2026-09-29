@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const router = express.Router();
 
 const Service = require("../models/Service");
+const { seedServices } = require("../config/seedData");
 
 // Helper to validate ObjectId
 const isValidId = (id) => mongoose.Types.ObjectId.isValid(id);
@@ -12,31 +13,47 @@ const isValidId = (id) => mongoose.Types.ObjectId.isValid(id);
 // GET /api/services
 // ==========================================
 router.get("/", async (req, res) => {
-  try {
-    const { category, search } = req.query;
-    const filter = {};
+  const { category, search } = req.query;
 
-    if (category && category !== "All") {
-      filter.category = new RegExp(category, "i");
+  // If MongoDB is connected, read from DB
+  if (mongoose.connection.readyState === 1) {
+    try {
+      const filter = {};
+      if (category && category !== "All") {
+        filter.category = new RegExp(category, "i");
+      }
+      if (search) {
+        filter.$or = [
+          { title: new RegExp(search, "i") },
+          { description: new RegExp(search, "i") },
+          { shortDescription: new RegExp(search, "i") },
+        ];
+      }
+
+      const services = await Service.find(filter).sort({ popular: -1, createdAt: -1 });
+      if (services && services.length > 0) {
+        return res.status(200).json(services);
+      }
+    } catch (error) {
+      console.warn("Fetch Services DB Warning (using seedServices fallback):", error.message);
     }
-
-    if (search) {
-      filter.$or = [
-        { title: new RegExp(search, "i") },
-        { description: new RegExp(search, "i") },
-        { shortDescription: new RegExp(search, "i") },
-      ];
-    }
-
-    const services = await Service.find(filter).sort({ popular: -1, createdAt: -1 });
-    res.status(200).json(services);
-  } catch (error) {
-    console.error("Fetch Services Error:", error.message);
-    res.status(500).json({
-      message: "Failed to fetch services",
-      error: error.message,
-    });
   }
+
+  // Graceful fallback to static seed data so API never fails or changes unexpectedly
+  let result = seedServices.map((s, idx) => ({ ...s, _id: s._id || `seed-srv-${idx + 1}` }));
+  if (category && category !== "All") {
+    result = result.filter((s) => s.category && s.category.toLowerCase() === category.toLowerCase());
+  }
+  if (search) {
+    const q = search.toLowerCase();
+    result = result.filter(
+      (s) =>
+        s.title.toLowerCase().includes(q) ||
+        (s.description && s.description.toLowerCase().includes(q))
+    );
+  }
+
+  res.status(200).json(result);
 });
 
 // ==========================================

@@ -35,7 +35,7 @@ app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Ensure database connection middleware for serverless / on-demand environments
+// Ensure database connection middleware - non-blocking to prevent 503 outages
 app.use(async (req, res, next) => {
   // Allow health checks to run without blocking on DB
   if (req.path === "/" || req.path === "/api/health") {
@@ -46,15 +46,10 @@ app.use(async (req, res, next) => {
     if (mongoose.connection.readyState !== 1) {
       await connectDB();
     }
-    next();
   } catch (err) {
-    console.error("[Database Connection Error on Request]", err.message);
-    return res.status(503).json({
-      status: "error",
-      message: "Database connection unavailable. Please check MONGO_URI configuration.",
-      error: err.message,
-    });
+    console.warn("[Database Connection Warning on Request]", err.message);
   }
+  next();
 });
 
 // Root route

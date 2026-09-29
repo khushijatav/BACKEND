@@ -2,6 +2,7 @@ const express = require("express");
 const mongoose = require("mongoose");
 const router = express.Router();
 const Counselor = require("../models/Counselor");
+const { seedCounselors } = require("../config/seedData");
 
 // Helper to validate ObjectId
 const isValidId = (id) => mongoose.Types.ObjectId.isValid(id);
@@ -11,29 +12,52 @@ const isValidId = (id) => mongoose.Types.ObjectId.isValid(id);
 // GET /api/counselors
 // ==========================================
 router.get("/", async (req, res) => {
-  try {
-    const { specialization, search } = req.query;
-    const filter = {};
+  const { specialization, search } = req.query;
 
-    if (specialization && specialization !== "All") {
-      filter.specialization = new RegExp(specialization, "i");
+  if (mongoose.connection.readyState === 1) {
+    try {
+      const filter = {};
+      if (specialization && specialization !== "All") {
+        filter.specialization = new RegExp(specialization, "i");
+      }
+      if (search) {
+        filter.$or = [
+          { name: new RegExp(search, "i") },
+          { specialization: new RegExp(search, "i") },
+          { role: new RegExp(search, "i") },
+          { bio: new RegExp(search, "i") },
+        ];
+      }
+
+      const counselors = await Counselor.find(filter).sort({ rating: -1, createdAt: -1 });
+      if (counselors && counselors.length > 0) {
+        return res.status(200).json(counselors);
+      }
+    } catch (error) {
+      console.warn("Fetch Counselors DB Warning (using seedCounselors fallback):", error.message);
     }
-
-    if (search) {
-      filter.$or = [
-        { name: new RegExp(search, "i") },
-        { specialization: new RegExp(search, "i") },
-        { role: new RegExp(search, "i") },
-        { bio: new RegExp(search, "i") },
-      ];
-    }
-
-    const counselors = await Counselor.find(filter).sort({ rating: -1, createdAt: -1 });
-    res.status(200).json(counselors);
-  } catch (error) {
-    console.error("Fetch Counselors Error:", error.message);
-    res.status(500).json({ message: "Failed to fetch counselors", error: error.message });
   }
+
+  // Graceful fallback so counselors list never disappears on refresh
+  let result = seedCounselors.map((c, idx) => ({ ...c, _id: c._id || `seed-counselor-${idx + 1}` }));
+  if (specialization && specialization !== "All") {
+    result = result.filter(
+      (c) =>
+        (c.specialization && c.specialization.toLowerCase().includes(specialization.toLowerCase())) ||
+        (c.role && c.role.toLowerCase().includes(specialization.toLowerCase()))
+    );
+  }
+  if (search) {
+    const q = search.toLowerCase();
+    result = result.filter(
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        (c.specialization && c.specialization.toLowerCase().includes(q)) ||
+        (c.role && c.role.toLowerCase().includes(q))
+    );
+  }
+
+  res.status(200).json(result);
 });
 
 // ==========================================
