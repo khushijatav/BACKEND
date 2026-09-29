@@ -39,7 +39,8 @@ const connectDB = async () => {
     return cachedPromise;
   }
 
-  const primaryUri = process.env.MONGO_URI;
+  const defaultAtlasUri = "mongodb+srv://jatavkhushi78_db_user:khushi12@cluster0.80yeens.mongodb.net/mindcare_counseling?retryWrites=true&w=majority&appName=Cluster0";
+  const primaryUri = process.env.MONGO_URI || (process.env.NODE_ENV === "production" ? defaultAtlasUri : null);
   const localFallbackUri = "mongodb://127.0.0.1:27017/mindcare_counseling";
   const targetUri = primaryUri || localFallbackUri;
 
