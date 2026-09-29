@@ -39,22 +39,34 @@ const connectDB = async () => {
     return cachedPromise;
   }
 
-  const mongoUri = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/mindcare_counseling";
+  const primaryUri = process.env.MONGO_URI;
+  const localFallbackUri = "mongodb://127.0.0.1:27017/mindcare_counseling";
+  const targetUri = primaryUri || localFallbackUri;
 
-  cachedPromise = mongoose
-    .connect(mongoUri, {
-      serverSelectionTimeoutMS: 8000,
-    })
-    .then(async (conn) => {
-      console.log(`[MongoDB] Connected successfully to host: ${conn.connection.host}, database: ${conn.connection.name}`);
-      await autoSeedIfEmpty();
-      return conn;
-    })
-    .catch((error) => {
-      cachedPromise = null;
-      console.error("[MongoDB] Connection Error:", error.message);
-      throw error;
-    });
+  const attemptConnection = (uri, isFallback = false) => {
+    return mongoose
+      .connect(uri, {
+        serverSelectionTimeoutMS: 5000,
+      })
+      .then(async (conn) => {
+        console.log(`[MongoDB] Connected successfully to host: ${conn.connection.host}, database: ${conn.connection.name}`);
+        await autoSeedIfEmpty();
+        return conn;
+      })
+      .catch(async (error) => {
+        if (!isFallback && primaryUri && primaryUri !== localFallbackUri && process.env.NODE_ENV !== "production") {
+          console.warn(`[MongoDB] Primary connection failed (${error.message}). Falling back to local MongoDB...`);
+          return attemptConnection(localFallbackUri, true);
+        }
+        throw error;
+      });
+  };
+
+  cachedPromise = attemptConnection(targetUri).catch((error) => {
+    cachedPromise = null;
+    console.error("[MongoDB] Connection Error:", error.message);
+    throw error;
+  });
 
   return cachedPromise;
 };
